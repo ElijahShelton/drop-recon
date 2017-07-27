@@ -99,7 +99,7 @@ classdef DropRecon3Dv1
                 end
                 LDFLAGS = ['-L',lsp];
                 CPPFLAGS = ['-I',hsp];
-                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitGaussianMex/fitGauss.cpp');
+                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitGauss.cpp');
                 fprintf('\n''fitGauss.cpp'' Compilation Successful!\n')
             else
                 fprintf(['This function is for compiling with a pc.\n',...
@@ -115,11 +115,11 @@ classdef DropRecon3Dv1
                 end
                 LDFLAGS = '-L/usr/local/opt/gsl@1/lib/';
                 CPPFLAGS = '-I/usr/local/opt/gsl@1/include/';
-                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitPolyMex/fitPoly1P10P01P00.cpp');
+                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitPoly1P10P01P00.cpp');
                 fprintf('\n''fitPoly1P10P01P00.cpp'' Compilation Successful!\n')
-                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitPolyMex/fitPoly2X.cpp');
+                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitPoly2X.cpp');
                 fprintf('\n''fitPoly2X.cpp'' Compilation Successful!\n')
-                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitPolyMex/fitPoly2.cpp');
+                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitPoly2.cpp');
                 fprintf('\n''fitPoly2.cpp'' Compilation Successful!\n')
                 
             else
@@ -149,7 +149,7 @@ classdef DropRecon3Dv1
                 end
                 LDFLAGS = '-L/usr/local/opt/gsl@1/lib/';
                 CPPFLAGS = '-I/usr/local/opt/gsl@1/include/';
-                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitGaussianMex/fitGauss.cpp');
+                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitGauss.cpp');
                 fprintf('\n''fitGauss.cpp'' Compilation Successful!\n')
             else
                 fprintf(['This function is for compiling with a mac.\n',...
@@ -170,11 +170,11 @@ classdef DropRecon3Dv1
                 end
                 LDFLAGS = '-L/usr/local/opt/gsl@1/lib/';
                 CPPFLAGS = '-I/usr/local/opt/gsl@1/include/';
-                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitPolyMex/fitPoly1P10P01P00.cpp');
+                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitPoly1P10P01P00.cpp');
                 fprintf('\n''fitPoly1P10P01P00.cpp'' Compilation Successful!\n')
-                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitPolyMex/fitPoly2X.cpp');
+                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitPoly2X.cpp');
                 fprintf('\n''fitPoly2X.cpp'' Compilation Successful!\n')
-                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitPolyMex/fitPoly2.cpp');
+                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/fitPoly2.cpp');
                 fprintf('\n''fitPoly2.cpp'' Compilation Successful!\n')
                 
             else
@@ -196,7 +196,7 @@ classdef DropRecon3Dv1
                 end
                 LDFLAGS = '-L/usr/local/opt/gsl@1/lib/';
                 CPPFLAGS = '-I/usr/local/opt/gsl@1/include/';
-                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/sterab filter 3D/steerableDetector3D.cpp');
+                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/steerableDetector3D.cpp');
 
                 fprintf('\n''steerableDetector3D.cpp'' Compilation Successful!\n')
             else
