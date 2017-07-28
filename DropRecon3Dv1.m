@@ -127,14 +127,6 @@ classdef DropRecon3Dv1
                     'MEX files were NOT created.'])
             end
         end
-        function [] = compile_steerable3D_pc()
-            if ispc
-                mex COMPFLAGS="$COMPFLAGS /TP /MT" -I"..\..\..\extern\mex\include\gsl-1.14" -I"..\..\mex\include" "..\..\..\extern\mex\lib\gsl.lib" "..\..\..\extern\mex\lib\cblas.lib" -output steerableDetector3D steerableDetector3D.cpp
-            else
-                fprintf(['This function is for compiling with a pc.\n',...
-                    'MEX files were NOT created.'])
-            end
-        end
         function [] = compile_fitGauss_mac()
             if ismac % If running on a mac
                 lsp = '/usr/local/opt/gsl@1/lib/';
@@ -182,37 +174,13 @@ classdef DropRecon3Dv1
                     'MEX files were NOT created.'])
             end
         end
-        function [] = compile_steerable3D_mac()
-            if ismac % If running on a mac
-                lsp = '/usr/local/opt/gsl@1/lib/';
-                hsp = '/usr/local/opt/gsl@1/include/';
-                if ~exist(lsp,'dir') || ~exist(hsp,'dir')
-                    warning('You appear to not have the GSL libraries required for compilation.')
-                    fprintf('Take the following steps to fix this problem:\n')
-                    fprintf('1) Install Homebrew ( available at http://brew.sh ).\n')
-                    fprintf('2) In the terminal, type: brew search gsl \n')
-                    fprintf('3) In the terminal, type: brew install gsl@1 \n')
-                    fprintf('4) In the matlab prompt, type: DropRecon3Dv1.compile_steerable3D_mac \n')
-                end
-                LDFLAGS = '-L/usr/local/opt/gsl@1/lib/';
-                CPPFLAGS = '-I/usr/local/opt/gsl@1/include/';
-                mex(LDFLAGS,CPPFLAGS,'-lgslcblas','-lgsl','lib/steerableDetector3D.cpp');
-
-                fprintf('\n''steerableDetector3D.cpp'' Compilation Successful!\n')
-            else
-                fprintf(['This function is for compiling with a mac.\n',...
-                    'MEX files were NOT created.'])
-            end
-        end
         function [] = compileMex()
             if ismac
                 DropRecon3Dv1.compile_fitGauss_mac();
                 DropRecon3Dv1.compile_fitPoly_mac();
-                DropRecon3Dv1.compile_steerable3D_mac();
             elseif ispc
                 DropRecon3Dv1.compile_fitGauss_pc();
                 DropRecon3Dv1.compile_fitPoly_pc();
-                DropRecon3Dv1.compile_steerable3D_pc();
             end
         end
         function [] = mexCheck()
@@ -250,8 +218,9 @@ classdef DropRecon3Dv1
             defPar = DropRecon3Dv1.getDefPar();
             N = defPar.numOfExpTifs;
             for n = 1:N
-                
-                poolObj = parpool();
+                if license('test', 'Distrib_Computing_Toolbox')
+                    poolObj = parpool();
+                end
                 fprintf('\nStarting on %d of %d\n',n,N);
                 defPar.tifNum = n;
                 fprintf('\n Loading tiff stack. This may take a few seconds... \n')
@@ -270,8 +239,9 @@ classdef DropRecon3Dv1
                 
                 drop = DropRecon3Dv1.saveDrop(meas,defPar);
                 
-                
-                delete(poolObj)
+                if license('test', 'Distrib_Computing_Toolbox')
+                    delete(poolObj)
+                end
                 fprintf('\n ...Finished %d of %d\n\n',n,N);
                 
             end
@@ -1101,21 +1071,16 @@ classdef DropRecon3Dv1
                     patchSize = FltrPatchSize;
                     numInNeighborhood = zeros(length(fCoordsR),1);
                     NS_kd = KDTreeSearcher(fCoordsR);
-                    if length(fCoordsR)>4.0e4 % 19 Aug 2016
-                        %poolObj = parpool;
-                        %[a,MSGID] = lastwarn();
+                    if length(fCoordsR)>4.0e4 && license('test', 'Distrib_Computing_Toolbox') % 19 Aug 2016
+                        
                         parfor i = 1:length(fCoordsR)
                             %% GET CIRCULAR PATCH INDICES
                             queryPoint = fCoordsR(i,:);
                             [idx,~]=rangesearch(NS_kd,queryPoint,patchSize); % this delivers the indices of points in the neighborhood
                             idx = idx{1};
                             idx=nonzeros(idx);
-                            %this is the neighborhood
-                            %patchCoords=fCoordsR(idx,:);
-                            %[numInNeighborhood(i),~] = size(patchCoords);
                             numInNeighborhood(i) = length(idx);
                         end
-                        %delete(poolObj)
                         
                     else
                         for i = 1:length(fCoordsR)
@@ -1250,9 +1215,7 @@ classdef DropRecon3Dv1
                         patchSize = FltrPatchSize;
                         numInNeighborhood = zeros(numOfCoords,1);
                         NS_kd = KDTreeSearcher(fCoordsN);
-                        if estimatedTime>45 % 19 Aug 2016
-                            %
-                            %poolObj = parpool;
+                        if estimatedTime>45 && license('test', 'Distrib_Computing_Toolbox')
                             parfor i = 1:numOfCoords
                                 %% GET CIRCULAR PATCH INDICES
                                 queryPoint = fCoordsN(i,:);
@@ -1264,8 +1227,6 @@ classdef DropRecon3Dv1
                                 %[numInNeighborhood(i),~] = size(patchCoords);
                                 numInNeighborhood(i) = length(idx);
                             end
-                            %delete(poolObj)
-                            %
                         else
                             %
                             for i = 1:numOfCoords
@@ -1380,9 +1341,8 @@ classdef DropRecon3Dv1
             fitIntsAtPeak = zeros(NTraces,1);
             rawIntsAtPeak = zeros(NTraces,1);
             fitOffset = zeros(NTraces,1);
-            if NTraces>2.3e4 % 19 Aug 2016
-                %poolObj = parpool;
-                %[a, MSGID] = lastwarn();
+            if NTraces>2.3e4 && license('test', 'Distrib_Computing_Toolbox')
+                
                 parfor i=1:NTraces
                     rStart1=RStart(i,:);
                     rV0=RV(i,:);
@@ -1403,9 +1363,7 @@ classdef DropRecon3Dv1
                     fitOffset(i) = traceResult.fitOffset;
                     
                 end
-                %delete(poolObj)
             else
-                
                 for i=1:NTraces
                     rStart1=RStart(i,:);
                     rV0=RV(i,:);
@@ -1746,8 +1704,7 @@ classdef DropRecon3Dv1
             end
             
             CoordsInNear = cell(length(CoordsInSubset),1);
-            % Don't use parfor, causes code to crash.
-            %
+            
             for i = 1:length(CoordsInSubset)
                 idx = IDX(i,:);
                 dists = DISTS(i,:);
@@ -1762,9 +1719,7 @@ classdef DropRecon3Dv1
             %
             ArgNumber = nargin;
             numCoords = length(CoordsInSubset);
-            if numCoords>1.5e5 % 19 Aug 2016
-                %
-                %poolobj = parpool;
+            if numCoords>1.5e5 && license('test', 'Distrib_Computing_Toolbox')
                 parfor i=1:length(CoordsInSubset)
                     %search nearest neighbors
                     idx = IDX(i,:);
@@ -1873,9 +1828,7 @@ classdef DropRecon3Dv1
             % Last edit: 19 Aug 2016
             numNormals = length(NormalsIn(:,1));
             NOut = nan(numNormals,3);
-            if numNormals>1.5e6 % 19 Aug 2016
-                %
-                %poolobj = parpool;
+            if numNormals>1.5e6 && license('test', 'Distrib_Computing_Toolbox')
                 parfor k=1:numNormals
                     orientation=sign(dot(NormalsIn(k,:),RVIn(k,:)));
                     NOut(k,:)=orientation*NormalsIn(k,:);
@@ -1896,9 +1849,7 @@ classdef DropRecon3Dv1
             [nRays, nCols] = size(RayDirections);
             Rays = nan(nRays, nCols);
             RayStarts = nan(nRays, nCols);
-            if nRays>2e6 % 19 Aug 2016
-                %
-                %poolobj = parpool;
+            if nRays>2e6 && license('test', 'Distrib_Computing_Toolbox')
                 parfor i=1:length(RayDirections)
                     Rays(i,:)=RayDirections(i,:);
                     Rays(i,:)=rayLength*1/norm(Rays(i,:))*Rays (i,:);
@@ -2299,21 +2250,35 @@ classdef DropRecon3Dv1
                 r_out = nan(endIndex,1);
                 recon_medFiltPatch_idx = cell(endIndex,1);
                 recon_r = recon.r;
-                %poolObj = parpool();
-                parfor i = startIndex:endIndex
-                    %% GET CIRCULAR PATCH COORDINATES
-                    queryPoint = CoordsIn(i,:);
-                    % find indices of points in the neighborhood
-                    [idx,~]=rangesearch(NS_kd,queryPoint,patchSize);
-                    idx = idx{1};
-                    idx=nonzeros(idx);
-                    recon_medFiltPatch_idx{i} = idx;
-                    % this is the neighborhood
-                    r_patch = recon_r(idx);
-                    r_out(i) = median(r_patch);
+                if license('test', 'Distrib_Computing_Toolbox')
+                    parfor i = startIndex:endIndex
+                        %% GET CIRCULAR PATCH COORDINATES
+                        queryPoint = CoordsIn(i,:);
+                        % find indices of points in the neighborhood
+                        [idx,~]=rangesearch(NS_kd,queryPoint,patchSize);
+                        idx = idx{1};
+                        idx=nonzeros(idx);
+                        recon_medFiltPatch_idx{i} = idx;
+                        % this is the neighborhood
+                        r_patch = recon_r(idx);
+                        r_out(i) = median(r_patch);
+                    end
+                else
+                    for i = startIndex:endIndex
+                        %% GET CIRCULAR PATCH COORDINATES
+                        queryPoint = CoordsIn(i,:);
+                        % find indices of points in the neighborhood
+                        [idx,~]=rangesearch(NS_kd,queryPoint,patchSize);
+                        idx = idx{1};
+                        idx=nonzeros(idx);
+                        recon_medFiltPatch_idx{i} = idx;
+                        % this is the neighborhood
+                        r_patch = recon_r(idx);
+                        r_out(i) = median(r_patch);
+                    end
                 end
                 recon.medFiltPatch.idx = recon_medFiltPatch_idx;
-                %delete(poolObj)
+                
             else
                 startIndex = 1;
                 endIndex = length(recon.x);
@@ -2590,19 +2555,16 @@ classdef DropRecon3Dv1
             GOF_h = nan(numberOfPoints,1);
             GOF_p = nan(numberOfPoints,1);
             NumPerPatch = nan(numberOfPoints,1);
-            startTime = clock;
             numOfNestedLoops = ceil(numberOfPoints/numInNest);
             for n=1:numOfNestedLoops
-                nestStartTime = clock;
                 startIndex = numInNest*(n-1)+1;
                 endIndex = numInNest*n;
                 if endIndex>numberOfPoints
                     endIndex = numberOfPoints;
                 end
-                %
-                %poolobj = parpool;
-                %warning('parfor not running')
+                
                 parfor i = startIndex:endIndex
+                    
                     %% GET CIRCULAR PATCH COORDINATES
                     queryPoint = CoordsIn(i,:);
                     patchTooBig = 1;
@@ -2637,7 +2599,6 @@ classdef DropRecon3Dv1
                             end
                         end
                     end
-                    %patchCoordsWeights = ErrCoordsIn(idx);
                     if (usefulPoints<6)
                         error('Too few useful points.')
                     end
@@ -2669,7 +2630,6 @@ classdef DropRecon3Dv1
                         H = nan;
                         dH = nan;
                         K = nan;
-                        %chiSq3 = nan;
                         inRes = nan;
                         outRes = nan;
                         RRes = nan;
@@ -2724,7 +2684,6 @@ classdef DropRecon3Dv1
                         LengthVar = nan;
                         LengthPatch = patchRadii(i);
                         npp = length(X_patch);
-                        %plot(X_patch,Y_patch,Z_patch,)
                         qzFit = p20f*qx0^2+p02f*qy0^2+...
                             p11f*qx0*qy0+p10*qx0+p01*qy0+p00;
                         qPointLF = [qx0,qy0,qzFit];
@@ -2756,9 +2715,6 @@ classdef DropRecon3Dv1
                     P20F(i) = p20f;
                     NumPerPatch(i) = npp;
                 end
-                nestEndTime = clock;
-                %delete(poolobj)
-                
             end
             
             Residuals.innerMean = ResidualsInnerMean;
@@ -2770,9 +2726,6 @@ classdef DropRecon3Dv1
             
             
             %% Report time
-            endTime = clock;
-            totalTime = endTime - startTime;
-            
             measurement.k1 = k1;
             measurement.k2 = k2;
             measurement.H_rec = MeanCurv;
