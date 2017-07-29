@@ -44,6 +44,8 @@ classdef DropRecon3Dv1
                 '\n',...
                 '3) To run, type ''DropRecon3Dv1.run'' and press enter.\n',...
                 '\n',...
+                'NOTE: MEX must be configured to compile C++ files.\n',...
+                'In the matlab command line, type: mex -setup cpp\n\n',...
                 'NOTE: If the required mex files are not present in the \n',...
                 'local directory, the program will attempt to compile them \n',...
                 'from the cpp files in ./lib/. After the mex files have \n',...
@@ -2549,11 +2551,16 @@ classdef DropRecon3Dv1
             ResidualsInnerMean = nan(numberOfPoints,1);
             ResidualsOuterMean = nan(numberOfPoints,1);
             ResidualsTimesRadius = nan(numberOfPoints,1);
+            fittingParameters = nan(numberOfPoints,6);
             LengthScaleVariation = nan(numberOfPoints,1);
             LengthScalePatch = nan(numberOfPoints,1);
             Alphas = nan(numberOfPoints,1);
+            Betas = nan(numberOfPoints,1);
             GOF_h = nan(numberOfPoints,1);
             GOF_p = nan(numberOfPoints,1);
+            P11F = nan(numberOfPoints,1);
+            P20F = nan(numberOfPoints,1);
+            P02F = nan(numberOfPoints,1);
             NumPerPatch = nan(numberOfPoints,1);
             numOfNestedLoops = ceil(numberOfPoints/numInNest);
             for n=1:numOfNestedLoops
@@ -2562,158 +2569,175 @@ classdef DropRecon3Dv1
                 if endIndex>numberOfPoints
                     endIndex = numberOfPoints;
                 end
-                
-                parfor i = startIndex:endIndex
-                    
-                    %% GET CIRCULAR PATCH COORDINATES
-                    queryPoint = CoordsIn(i,:);
-                    patchTooBig = 1;
-                    rp = patchRadii(i);
-                    while patchTooBig
-                        [idx,~]=rangesearch(NS_kd,queryPoint,rp); % this delivers the indices of points in the neighborhood
-                        patchRadii(i) = rp;
-                        idx = idx{1};
-                        idx=nonzeros(idx);
-                        %this is the neighborhood
-                        patchCoordsGF=CoordsIn(idx,:);
-                        usefulPoints = length(patchCoordsGF(:,1));
-                        H_inPatch = k_est(idx);
-                        deltaH_rec = range(H_inPatch);
-                        if (rp==minRp)||(usefulPoints==6)
-                            patchTooBig = 0;
-                            if usefulPoints<6
-                                [idx,dst]=knnsearch(NS_kd,queryPoint,'k',6); % this delivers the indices of points in the neighborhood
-                                idx=nonzeros(idx);
-                                %this is the neighborhood
-                                patchCoordsGF=CoordsIn(idx,:);
-                                patchRadii(i) = max(dst(:));
-                                usefulPoints = length(patchCoordsGF(:,1));
-                            end
-                        else
-                            patchTooBig = (deltaH_rec/k_est(i))>maxHVar
-                            if patchTooBig
-                                rp = rp*(1-2*pi/d_lambda);
-                                if (rp<minRp)||(usefulPoints<6)
-                                    rp=minRp;
+                if license('test', 'Distrib_Computing_Toolbox')
+                    parfor i = startIndex:endIndex
+                        %% THESE NEED TO BE SLICED
+                        queryPoint = CoordsIn(i,:);
+                        rp = patchRadii(i);
+                        [MeanCurv(i),GausCurv(i),patchRadii(i),...
+                            ResidualsInnerMean(i),ResidualsOuterMean(i),...
+                            ResidualsTimesRadius(i),H_rangeInPatch(i),...
+                            fittingParameters(i,:),a_patch(i),b_patch(i),...
+                            coordsRecSurface(i,:),...
+                            surfaceNormalsPoly3(i,:),MeanCurvStdErr(i),...
+                            ChiSqrd(i),LengthScaleVariation(i),...
+                            LengthScalePatch(i),Alphas(i),Betas(i),GOF_h(i),...
+                            GOF_p(i),P11F(i),P20F(i),P02F(i),NumPerPatch(i)] = ...
+                            DropRecon3Dv1.littleAnalysisLoop(i,CoordsIn,rp,NS_kd,k_est,minRp,maxHVar,center,d_lambda);
+                    end
+                else
+                    for i = startIndex:endIndex
+                        
+                        %% GET CIRCULAR PATCH COORDINATES
+                        queryPoint = CoordsIn(i,:);
+                        patchTooBig = 1;
+                        rp = patchRadii(i);
+                        while patchTooBig
+                            [idx,~]=rangesearch(NS_kd,queryPoint,rp); % this delivers the indices of points in the neighborhood
+                            patchRadii(i) = rp;
+                            idx = idx{1};
+                            idx=nonzeros(idx);
+                            %this is the neighborhood
+                            patchCoordsGF=CoordsIn(idx,:);
+                            usefulPoints = length(patchCoordsGF(:,1));
+                            H_inPatch = k_est(idx);
+                            deltaH_rec = range(H_inPatch);
+                            if (rp==minRp)||(usefulPoints==6)
+                                patchTooBig = 0;
+                                if usefulPoints<6
+                                    [idx,dst]=knnsearch(NS_kd,queryPoint,'k',6); % this delivers the indices of points in the neighborhood
+                                    idx=nonzeros(idx);
+                                    %this is the neighborhood
+                                    patchCoordsGF=CoordsIn(idx,:);
+                                    patchRadii(i) = max(dst(:));
+                                    usefulPoints = length(patchCoordsGF(:,1));
+                                end
+                            else
+                                patchTooBig = (deltaH_rec/k_est(i))>maxHVar;
+                                if patchTooBig
+                                    rp = rp*(1-2*pi/d_lambda);
+                                    if (rp<minRp)||(usefulPoints<6)
+                                        rp=minRp;
+                                    end
                                 end
                             end
                         end
+                        if (usefulPoints<6)
+                            error('Too few useful points.')
+                        end
+                        [eigenvectors,~] = DropRecon3Dv1.getPrincipalAxes(...
+                            queryPoint,patchCoordsGF);
+                        % e1 cooresponds to normal
+                        e1=eigenvectors(:,1);e2=eigenvectors(:,2);...
+                            e3=eigenvectors(:,3);
+                        % fix orientation of normal
+                        if sign((center - queryPoint)*e1) == -1
+                            e1 = -e1;
+                            e2 = -e2;
+                            %e3 = e3;
+                        end
+                        
+                        if (sum([isnan(e1)', isnan(e2)', isnan(e3)'])>0)
+                            warning('Principal axes are meaningless')
+                        end
+                        thisCoordinate = [nan, nan, nan];
+                        gofH = nan;
+                        gofP = nan;
+                        p20f = nan;
+                        p02f = nan;
+                        p11f = nan;
+                        N_GF = [nan, nan, nan];
+                        usefulPoints = length(patchCoordsGF(:,1));
+                        if (usefulPoints<6)
+                            warning('Too few points for meaningful fit')
+                            H = nan;
+                            dH = nan;
+                            K = nan;
+                            inRes = nan;
+                            outRes = nan;
+                            RRes = nan;
+                            LengthVar = nan;
+                            LengthPatch = nan;
+                            fPar2 = nan(1,6);
+                            chiSq2 = nan;
+                            alpha = nan;
+                            beta = nan;
+                            npp = usefulPoints;
+                        else
+                            [patchCoordsLF,W_patch,qPoint] ...
+                                = DropRecon3Dv1.getCoordsLocalFrame(queryPoint,patchCoordsGF,e1,e2,e3 );
+                            %% FIT CIRCULAR PATCH COORDINATES
+                            X_patch=patchCoordsLF(:,1);
+                            Y_patch=patchCoordsLF(:,2);
+                            Z_patch=patchCoordsLF(:,3);
+                            
+                            [fPar2,errfPar2,chiSq2,residuals2] = ...
+                                DropRecon3Dv1.getPolyFit2(X_patch,...
+                                Y_patch,Z_patch,W_patch);
+                            
+                            p20f = fPar2(1);
+                            p02f = fPar2(2);
+                            p11f = fPar2(3);
+                            p10 = fPar2(4);
+                            p01 = fPar2(5);
+                            p00 = fPar2(6);
+                            
+                            qx0=qPoint(1);qy0=qPoint(2);
+                            % This is how we turn the fit data into mean curvature
+                            
+                            [H,dH]=DropRecon3Dv1.getMeanCurvaturePoly2(...
+                                fPar2,qx0,qy0,errfPar2);
+                            % This is how we turn the fit data into gaussian curvature
+                            [K]=DropRecon3Dv1.getGaussianCurvaturePoly2(...
+                                fPar2,qx0,qy0);
+                            
+                            [nxLF,nyLF,nzLF]=DropRecon3Dv1.getNormalPoly2(...
+                                fPar2,qx0,qy0);
+                            N_LF = [nxLF,nyLF,nzLF];
+                            
+                            alpha = std(residuals2);
+                            beta = mean(residuals2);
+                            [gofH,gofP] = chi2gof(residuals2);
+                            R_patch = sqrt(X_patch.^2+Y_patch.^2+...
+                                Z_patch.^2);
+                            R_median = median(R_patch);
+                            inRes = mean(residuals2(R_patch<R_median));
+                            outRes = mean(residuals2(R_patch>R_median));
+                            RRes = sum(residuals2.*R_patch)./sum(R_patch);
+                            LengthVar = nan;
+                            LengthPatch = patchRadii(i);
+                            npp = length(X_patch);
+                            qzFit = p20f*qx0^2+p02f*qy0^2+...
+                                p11f*qx0*qy0+p10*qx0+p01*qy0+p00;
+                            qPointLF = [qx0,qy0,qzFit];
+                            N_GF = N_LF/[e2,e3,e1];
+                            thisCoordinate = qPointLF/[e2,e3,e1]+...
+                                mean(patchCoordsGF);
+                        end
+                        coordsRecSurface(i,:) = thisCoordinate;
+                        surfaceNormalsPoly3(i,:) = N_GF;
+                        H_rangeInPatch(i) = deltaH_rec;
+                        MeanCurv(i) = H;
+                        MeanCurvStdErr(i) = dH;
+                        GausCurv(i) = K;
+                        ChiSqrd(i) = chiSq2;
+                        ResidualsInnerMean(i) = inRes;
+                        ResidualsOuterMean(i) = outRes;
+                        ResidualsTimesRadius(i) = RRes;
+                        LengthScaleVariation(i) = LengthVar;
+                        LengthScalePatch(i) = LengthPatch;
+                        a_patch(i) = LengthPatch;
+                        b_patch(i) = LengthPatch;
+                        fittingParameters(i,:) = fPar2;
+                        Alphas(i) = alpha;
+                        Betas(i) = beta;
+                        GOF_h(i) = gofH;
+                        GOF_p(i) = gofP;
+                        P11F(i) = p11f;
+                        P02F(i) = p02f;
+                        P20F(i) = p20f;
+                        NumPerPatch(i) = npp;
                     end
-                    if (usefulPoints<6)
-                        error('Too few useful points.')
-                    end
-                    [eigenvectors,~] = DropRecon3Dv1.getPrincipalAxes(...
-                        queryPoint,patchCoordsGF);
-                    % e1 cooresponds to normal
-                    e1=eigenvectors(:,1);e2=eigenvectors(:,2);...
-                        e3=eigenvectors(:,3);
-                    % fix orientation of normal
-                    if sign((center - queryPoint)*e1) == -1
-                        e1 = -e1;
-                        e2 = -e2;
-                        %e3 = e3;
-                    end
-                    
-                    if (sum([isnan(e1)', isnan(e2)', isnan(e3)'])>0)
-                        warning('Principal axes are meaningless')
-                    end
-                    thisCoordinate = [nan, nan, nan];
-                    gofH = nan;
-                    gofP = nan;
-                    p20f = nan;
-                    p02f = nan;
-                    p11f = nan;
-                    N_GF = [nan, nan, nan];
-                    usefulPoints = length(patchCoordsGF(:,1));
-                    if (usefulPoints<6)
-                        warning('Too few points for meaningful fit')
-                        H = nan;
-                        dH = nan;
-                        K = nan;
-                        inRes = nan;
-                        outRes = nan;
-                        RRes = nan;
-                        LengthVar = nan;
-                        LengthPatch = nan;
-                        fPar2 = nan(1,6);
-                        chiSq2 = nan;
-                        alpha = nan;
-                        beta = nan;
-                        npp = usefulPoints;
-                    else
-                        [patchCoordsLF,W_patch,qPoint] ...
-                            = DropRecon3Dv1.getCoordsLocalFrame(queryPoint,patchCoordsGF,e1,e2,e3 );
-                        %% FIT CIRCULAR PATCH COORDINATES
-                        X_patch=patchCoordsLF(:,1);
-                        Y_patch=patchCoordsLF(:,2);
-                        Z_patch=patchCoordsLF(:,3);
-                        
-                        [fPar2,errfPar2,chiSq2,residuals2] = ...
-                            DropRecon3Dv1.getPolyFit2(X_patch,...
-                            Y_patch,Z_patch,W_patch);
-                        
-                        p20f = fPar2(1);
-                        p02f = fPar2(2);
-                        p11f = fPar2(3);
-                        p10 = fPar2(4);
-                        p01 = fPar2(5);
-                        p00 = fPar2(6);
-                        
-                        qx0=qPoint(1);qy0=qPoint(2);
-                        % This is how we turn the fit data into mean curvature
-                        
-                        [H,dH]=DropRecon3Dv1.getMeanCurvaturePoly2(...
-                            fPar2,qx0,qy0,errfPar2);
-                        % This is how we turn the fit data into gaussian curvature
-                        [K]=DropRecon3Dv1.getGaussianCurvaturePoly2(...
-                            fPar2,qx0,qy0);
-                        
-                        [nxLF,nyLF,nzLF]=DropRecon3Dv1.getNormalPoly2(...
-                            fPar2,qx0,qy0);
-                        N_LF = [nxLF,nyLF,nzLF];
-                        
-                        alpha = std(residuals2);
-                        beta = mean(residuals2);
-                        [gofH,gofP] = chi2gof(residuals2);
-                        R_patch = sqrt(X_patch.^2+Y_patch.^2+...
-                            Z_patch.^2);
-                        R_median = median(R_patch);
-                        inRes = mean(residuals2(R_patch<R_median));
-                        outRes = mean(residuals2(R_patch>R_median));
-                        RRes = sum(residuals2.*R_patch)./sum(R_patch);
-                        LengthVar = nan;
-                        LengthPatch = patchRadii(i);
-                        npp = length(X_patch);
-                        qzFit = p20f*qx0^2+p02f*qy0^2+...
-                            p11f*qx0*qy0+p10*qx0+p01*qy0+p00;
-                        qPointLF = [qx0,qy0,qzFit];
-                        N_GF = N_LF/[e2,e3,e1];
-                        thisCoordinate = qPointLF/[e2,e3,e1]+...
-                            mean(patchCoordsGF);
-                    end
-                    coordsRecSurface(i,:) = thisCoordinate;
-                    surfaceNormalsPoly3(i,:) = N_GF;
-                    H_rangeInPatch(i) = deltaH_rec;
-                    MeanCurv(i) = H;
-                    MeanCurvStdErr(i) = dH;
-                    GausCurv(i) = K;
-                    ChiSqrd(i) = chiSq2;
-                    ResidualsInnerMean(i) = inRes;
-                    ResidualsOuterMean(i) = outRes;
-                    ResidualsTimesRadius(i) = RRes;
-                    LengthScaleVariation(i) = LengthVar;
-                    LengthScalePatch(i) = LengthPatch;
-                    a_patch(i) = LengthPatch;
-                    b_patch(i) = LengthPatch;
-                    fittingParameters(i,:) = fPar2;
-                    Alphas(i) = alpha;
-                    Betas(i) = beta;
-                    GOF_h(i) = gofH;
-                    GOF_p(i) = gofP;
-                    P11F(i) = p11f;
-                    P02F(i) = p02f;
-                    P20F(i) = p20f;
-                    NumPerPatch(i) = npp;
                 end
             end
             
@@ -2761,6 +2785,166 @@ classdef DropRecon3Dv1
             measurement.P20F = P20F;
             measurement.P02F = P02F;
             measurement.NumPerPatch = NumPerPatch;
+            
+        end
+        function [MeanCurv,GausCurv,patchRadii,...
+                ResidualsInnerMean,ResidualsOuterMean,...
+                ResidualsTimesRadius,H_rangeInPatch,...
+                fittingParameters,a_patch,b_patch,...
+                coordsRecSurface,...
+                surfaceNormalsPoly3,MeanCurvStdErr,...
+                ChiSqrd,LengthScaleVariation,...
+                LengthScalePatch,Alphas,Betas,GOF_h,...
+                GOF_p,P11F,P20F,P02F,NumPerPatch] = ...
+                littleAnalysisLoop(i,CoordsIn,rp,NS_kd,k_est,minRp,maxHVar,center,d_lambda)
+            %% GET CIRCULAR PATCH COORDINATES
+            queryPoint = CoordsIn(i,:);
+            patchTooBig = 1;
+            while patchTooBig
+                [idx,~]=rangesearch(NS_kd,queryPoint,rp); % this delivers the indices of points in the neighborhood
+                patchRadii = rp;
+                idx = idx{1};
+                idx=nonzeros(idx);
+                %this is the neighborhood
+                patchCoordsGF=CoordsIn(idx,:);
+                usefulPoints = length(patchCoordsGF(:,1));
+                H_inPatch = k_est(idx);
+                deltaH_rec = range(H_inPatch);
+                if (rp==minRp)||(usefulPoints==6)
+                    patchTooBig = 0;
+                    if usefulPoints<6
+                        [idx,dst]=knnsearch(NS_kd,queryPoint,'k',6); % this delivers the indices of points in the neighborhood
+                        idx=nonzeros(idx);
+                        %this is the neighborhood
+                        patchCoordsGF=CoordsIn(idx,:);
+                        patchRadii = max(dst(:));
+                        usefulPoints = length(patchCoordsGF(:,1));
+                    end
+                else
+                    patchTooBig = (deltaH_rec/k_est(i))>maxHVar;
+                    if patchTooBig
+                        rp = rp*(1-2*pi/d_lambda);
+                        if (rp<minRp)||(usefulPoints<6)
+                            rp=minRp;
+                        end
+                    end
+                end
+            end
+            if (usefulPoints<6)
+                error('Too few useful points.')
+            end
+            [eigenvectors,~] = DropRecon3Dv1.getPrincipalAxes(...
+                queryPoint,patchCoordsGF);
+            % e1 cooresponds to normal
+            e1=eigenvectors(:,1);e2=eigenvectors(:,2);...
+                e3=eigenvectors(:,3);
+            % fix orientation of normal
+            if sign((center - queryPoint)*e1) == -1
+                e1 = -e1;
+                e2 = -e2;
+                %e3 = e3;
+            end
+            
+            if (sum([isnan(e1)', isnan(e2)', isnan(e3)'])>0)
+                warning('Principal axes are meaningless')
+            end
+            thisCoordinate = [nan, nan, nan];
+            gofH = nan;
+            gofP = nan;
+            p20f = nan;
+            p02f = nan;
+            p11f = nan;
+            N_GF = [nan, nan, nan];
+            usefulPoints = length(patchCoordsGF(:,1));
+            if (usefulPoints<6)
+                warning('Too few points for meaningful fit')
+                H = nan;
+                dH = nan;
+                K = nan;
+                inRes = nan;
+                outRes = nan;
+                RRes = nan;
+                LengthVar = nan;
+                LengthPatch = nan;
+                fPar2 = nan(1,6);
+                chiSq2 = nan;
+                alpha = nan;
+                beta = nan;
+                npp = usefulPoints;
+            else
+                [patchCoordsLF,W_patch,qPoint] ...
+                    = DropRecon3Dv1.getCoordsLocalFrame(queryPoint,patchCoordsGF,e1,e2,e3 );
+                %% FIT CIRCULAR PATCH COORDINATES
+                X_patch=patchCoordsLF(:,1);
+                Y_patch=patchCoordsLF(:,2);
+                Z_patch=patchCoordsLF(:,3);
+                
+                [fPar2,errfPar2,chiSq2,residuals2] = ...
+                    DropRecon3Dv1.getPolyFit2(X_patch,...
+                    Y_patch,Z_patch,W_patch);
+                
+                p20f = fPar2(1);
+                p02f = fPar2(2);
+                p11f = fPar2(3);
+                p10 = fPar2(4);
+                p01 = fPar2(5);
+                p00 = fPar2(6);
+                
+                qx0=qPoint(1);qy0=qPoint(2);
+                % This is how we turn the fit data into mean curvature
+                
+                [H,dH]=DropRecon3Dv1.getMeanCurvaturePoly2(...
+                    fPar2,qx0,qy0,errfPar2);
+                % This is how we turn the fit data into gaussian curvature
+                [K]=DropRecon3Dv1.getGaussianCurvaturePoly2(...
+                    fPar2,qx0,qy0);
+                
+                [nxLF,nyLF,nzLF]=DropRecon3Dv1.getNormalPoly2(...
+                    fPar2,qx0,qy0);
+                N_LF = [nxLF,nyLF,nzLF];
+                
+                alpha = std(residuals2);
+                beta = mean(residuals2);
+                [gofH,gofP] = chi2gof(residuals2);
+                R_patch = sqrt(X_patch.^2+Y_patch.^2+...
+                    Z_patch.^2);
+                R_median = median(R_patch);
+                inRes = mean(residuals2(R_patch<R_median));
+                outRes = mean(residuals2(R_patch>R_median));
+                RRes = sum(residuals2.*R_patch)./sum(R_patch);
+                LengthVar = nan;
+                LengthPatch = patchRadii;
+                npp = length(X_patch);
+                qzFit = p20f*qx0^2+p02f*qy0^2+...
+                    p11f*qx0*qy0+p10*qx0+p01*qy0+p00;
+                qPointLF = [qx0,qy0,qzFit];
+                N_GF = N_LF/[e2,e3,e1];
+                thisCoordinate = qPointLF/[e2,e3,e1]+...
+                    mean(patchCoordsGF);
+            end
+            coordsRecSurface = thisCoordinate;
+            surfaceNormalsPoly3 = N_GF;
+            H_rangeInPatch = deltaH_rec;
+            MeanCurv = H;
+            MeanCurvStdErr = dH;
+            GausCurv = K;
+            ChiSqrd = chiSq2;
+            ResidualsInnerMean = inRes;
+            ResidualsOuterMean = outRes;
+            ResidualsTimesRadius = RRes;
+            LengthScaleVariation = LengthVar;
+            LengthScalePatch = LengthPatch;
+            a_patch = LengthPatch;
+            b_patch = LengthPatch;
+            fittingParameters = fPar2;
+            Alphas = alpha;
+            Betas = beta;
+            GOF_h = gofH;
+            GOF_p = gofP;
+            P11F = p11f;
+            P02F = p02f;
+            P20F = p20f;
+            NumPerPatch = npp;
             
         end
         function [CoordsLocalFrame,distWeights,qPointLF] = ...
