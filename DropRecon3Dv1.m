@@ -91,7 +91,6 @@ classdef DropRecon3Dv1
             end
             
         end
-        
         function [] = compile_fitGauss_pc()
             if ispc % If running on a pc
                 lsp = 'C:\gsl\lib';
@@ -269,25 +268,25 @@ classdef DropRecon3Dv1
             H = H_inv_um_int(A,E);
             
             [X,Y,Z] = sph2cart(A,E,R);
-            
-            figure(1)
-            Ro = mean(drop.r.um);
-            r_err = (R./Ro - 1);
-            surface(X,Y,Z,r_err,'LineStyle','none')
-            axis equal
-            axis off;
-            caxis([-0.03 0.03])
-            fig = gcf;
-            fig.Color = [1 1 1];
-            
-            figure(2)
-            H_err = (H.*Ro - 1);
-            surface(X,Y,Z,H_err,'LineStyle','none')
-            axis equal
-            axis off;
-            caxis([-0.3 0.3])
-            fig = gcf;
-            fig.Color = [1 1 1];
+%             
+%             figure(1)
+%             Ro = mean(drop.r.um);
+%             r_err = (R./Ro - 1);
+%             surface(X,Y,Z,r_err,'LineStyle','none')
+%             axis equal
+%             axis off;
+%             caxis([-0.03 0.03])
+%             fig = gcf;
+%             fig.Color = [1 1 1];
+%             
+%             figure(2)
+%             H_err = (H.*Ro - 1);
+%             surface(X,Y,Z,H_err,'LineStyle','none')
+%             axis equal
+%             axis off;
+%             caxis([-0.3 0.3])
+%             fig = gcf;
+%             fig.Color = [1 1 1];
             
             grph.X = X;
             grph.Y = Y;
@@ -298,20 +297,20 @@ classdef DropRecon3Dv1
             grph.H = H;
             
             %% MAKE RADIAL MAP GIF
-            titStr = 'Radial Map (microns)';
+            caxisStr = 'Radius (\mum)';
             gifName = 'r_map_um.gif';
             a = strfind(drop.path2ResultsFile,'/');
             b = a(end);
             gifPath = [drop.path2ResultsFile(1:b),gifName];
-            DropRecon3Dv1.makeGif(X,Y,Z,R,titStr,gifPath)
+            DropRecon3Dv1.makeGif(X,Y,Z,R,caxisStr,gifPath)
             
             %% MAKE MEAN CURVATURE MAP GIF
-            titStr = 'Mean Curvatue Map (1/microns)';
+            caxisStr = 'Mean Curvature (1/\mum)';
             gifName = 'H_map_inv_um.gif';
             a = strfind(drop.path2ResultsFile,'/');
             b = a(end);
             gifPath = [drop.path2ResultsFile(1:b),gifName];
-            DropRecon3Dv1.makeGif(X,Y,Z,H,titStr,gifPath)
+            DropRecon3Dv1.makeGif(X,Y,Z,H,caxisStr,gifPath)
         end
         function [drop] = saveDrop(meas,defPar)
             drop.H.inv_px = meas.H_rec;
@@ -3263,8 +3262,8 @@ classdef DropRecon3Dv1
             measurement.H_medRecInPatch = H_medRecInPatch;
             measurement.H_medAnalInPatch = H_medAnalInPatch;
         end
-        function [] = makeGif(X,Y,Z,V,titStr,gifPath)
-            % 27 Sept 2016
+        function [] = makeGif(X,Y,Z,V,cAxisStr,gifPath)
+            % 30 July 2017
             numOfFrames = 192;
             close all
             
@@ -3277,7 +3276,7 @@ classdef DropRecon3Dv1
             
             set(gca,'color',[0 0 0])
             set(gcf,'color',[0 0 0])
-            title(titStr,'Color','white')
+            %title(cAxisStr,'Color','white')
             set(gcf, 'InvertHardCopy', 'off');
             set(gca,'nextplot','replacechildren','visible','off')
             f = getframe;
@@ -3298,9 +3297,25 @@ classdef DropRecon3Dv1
             end
             imwrite(im,map,gifPath,'DelayTime',0,...
                 'LoopCount',inf,'WriteMode','overwrite')
+            
+            
+            % SAVE COLORMAP
+            
+            %f=figure;
+            %a=axes;
+            set(gca,'color',[1 1 1])
+            set(gcf,'color',[1 1 1])
+            c=colorbar;
+            ylabel(c,cAxisStr) 
+            epsPath = [gifPath(1:end-4),'-colormap.eps'];
+            print(epsPath,'-depsc')
+            
             close all
             clear im
+            
+            
         end
+        
         function [evalMetric,measurement] = evalMeas(measurement,anal,evalMetric)
             %% Make Gifs and Maps
             measurement.H_analGrid = anal.HGrid;
