@@ -9,7 +9,7 @@ classdef DropRecon3Dv1
     %                       University of California, Santa Barbara
     % Last Modified July 2017
     %
-    % License:              
+    % License:              For Academic Use Only
     % Contact:              https://github.com/ElijahShelton
     % Coded by:             Elijah Shelton & Friedhelm Serwane
     
