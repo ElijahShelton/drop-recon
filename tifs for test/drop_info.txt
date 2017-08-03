@@ -1,0 +1,10 @@
+
+These drops are provided for demonstration.
+
+filename: drop_in_agarose.tif
+voxel size in x & y: 0.4151 um
+voxel size in z: 1 um
+
+filename: drop_in_spheroid.tif
+voxel size in x & y: 0.4151 um
+voxel size in z: 1 um
